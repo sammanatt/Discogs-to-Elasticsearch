@@ -50,7 +50,6 @@ def discogs_full_import(discogs_username):
 
 
 def main(args):
-    if args.full == True:
         discogs_full_import(args.user)
 
 
@@ -62,13 +61,6 @@ if __name__ == "__main__":
                           default=None,
                           help="Discogs user to import from.",
                           type=str)
-        parser.add_argument('-f',
-                            '--full',
-                            '-a',
-                            '--all',
-                            default=None,
-                            help="Creates a new index within elasticsearch and inserts all entries within the specified Discogs user's collection. If a matching index already exists, it will be overwritten.",
-                            action='store_true')
         args = parser.parse_args()
 
         if args.user is None:
