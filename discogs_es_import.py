@@ -5,6 +5,7 @@ import time
 import certifi
 import requests
 import argparse
+import elasticsearch.helpers
 from elasticsearch import Elasticsearch
 
 # Load environment file, assign variables
@@ -50,7 +51,20 @@ def discogs_full_import(discogs_username):
         except requests.exceptions.ConnectionError:
             print("API refused connection.")
 
+
+def get_all_ids():
+    es_id_list = []
+    get_ids = elasticsearch.helpers.scan(es,
+                                        query={"query": {"match_all": {}}},
+                                        index="discogs_"+args.user,
+                                        )
+    for i in get_ids:
+        es_id_list.append(i['_id'])
+    print(len(es_id_list))
+
+
 def discogs_import_new_entries(discogs_username):
+    # Scan Discogs library
     page = 1
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
     total_pages = albums["pagination"]["pages"]
@@ -67,9 +81,10 @@ def discogs_import_new_entries(discogs_username):
         except requests.exceptions.ConnectionError:
             print("API refused connection.")
 
-def main(args):
-        discogs_full_import(args.user)
 
+def main(args):
+        #discogs_full_import(args.user)
+        get_all_ids()
 
 if __name__ == "__main__":
         # Build argument parser
