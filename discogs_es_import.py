@@ -14,13 +14,14 @@ load_dotenv()
 elasticsearch_user = os.environ["elasticsearch_user"]
 elasticsearch_password = os.environ["elasticsearch_password"]
 elasticsearch_connection_string = os.environ["elasticsearch_connection_string"]
+elasticsearch_port = os.environ["elasticsearch_port"]
 discogs_username = os.environ["discogs_username"]
 
 # Connecting to ES
 try:
     es = Elasticsearch([str(elasticsearch_connection_string)],
         http_auth=(elasticsearch_user,elasticsearch_password),
-        port=4105,
+        port=elasticsearch_port,
         use_ssl=True,
         verify_certs=True,
         ca_certs=certifi.where(),
@@ -35,19 +36,36 @@ url = "https://api.discogs.com/"
 
 def discogs_full_import(discogs_username):
     page = 1
-    es_id = 1
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
     total_pages = albums["pagination"]["pages"]
     while page <= total_pages:
-        albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
-        for i in albums["releases"]:
-            print(i)
-            es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-            time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
-            print("this is ES ID: " + str(es_id))
-            es_id += 1
-        page = page + 1
+        try:
+            albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
+            for i in albums["releases"]:
+                print("\n" + i + "\n")
+                es_id = i['date_added']
+                es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
+                time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
+            page = page + 1
+        except requests.exceptions.ConnectionError:
+            print("API refused connection.")
 
+def discogs_import_new_entries(discogs_username):
+    page = 1
+    albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
+    total_pages = albums["pagination"]["pages"]
+    while page <= total_pages:
+        try:
+            albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
+            for i in albums["releases"]:
+                print("\n" + i + "\n")
+                #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
+                es_id = i['date_added']
+                #es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
+                time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
+            page = page + 1
+        except requests.exceptions.ConnectionError:
+            print("API refused connection.")
 
 def main(args):
         discogs_full_import(args.user)
