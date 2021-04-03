@@ -75,22 +75,34 @@ def discogs_es_sync(discogs_username):
     page = 1
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
     total_pages = albums["pagination"]["pages"]
+    discogs_library = []
     while page <= total_pages:
         try:
             albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
             for i in albums["releases"]:
+                discogs_library.append(i['date_added'])
                 #pp.pprint(i)
                 #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
                 es_id = i['date_added']
                 if es_id in existing_ids:
-                    print(f"Album already exists within Elasticsearch: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
-                else:
+                    print(f"Album already exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                elif es_id not in existing_ids:
                     print(f"New album!!!  {i['basic_information']['title']}")
                     es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
+                elif discogs_library:
+                    print("*** WRITE COMMAND TO DELETE FROM ELASTICSEARCH")
                 time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
             page = page + 1
         except requests.exceptions.ConnectionError:
             print("API refused connection.")
+    # Delete Elasticsearch documents that no longer exist in Discogs library
+    print("Running cleanup...")
+    for i in existing_ids:
+        if i not in discogs_library:
+            #debug me! returning Make Yourself and Summer Pack. Should return Make Yourself and Bruce live
+            print(f"this has got to go: {i}")
+        else:
+            print("No albums to delete.")
 
 
 def main(args):
