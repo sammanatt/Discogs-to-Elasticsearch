@@ -5,8 +5,11 @@ import time
 import certifi
 import requests
 import argparse
+import pprint
 import elasticsearch.helpers
 from elasticsearch import Elasticsearch
+
+pp = pprint.PrettyPrinter(indent=4)
 
 # Load environment file, assign variables
 from dotenv import load_dotenv
@@ -53,6 +56,9 @@ def discogs_full_import(discogs_username):
 
 
 def get_all_ids():
+    """
+    Create a list of all existing _id values within Elascticsearch.
+    """
     es_id_list = []
     get_ids = elasticsearch.helpers.scan(es,
                                         query={"query": {"match_all": {}}},
@@ -60,10 +66,11 @@ def get_all_ids():
                                         )
     for i in get_ids:
         es_id_list.append(i['_id'])
-    print(len(es_id_list))
+    return es_id_list
 
 
-def discogs_import_new_entries(discogs_username):
+def discogs_es_sync(discogs_username):
+    existing_ids = get_all_ids()
     # Scan Discogs library
     page = 1
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
@@ -72,10 +79,14 @@ def discogs_import_new_entries(discogs_username):
         try:
             albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
             for i in albums["releases"]:
-                print("\n" + i + "\n")
+                #pp.pprint(i)
                 #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
                 es_id = i['date_added']
-                #es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
+                if es_id in existing_ids:
+                    print(f"Album already exists within Elasticsearch: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                else:
+                    print(f"New album!!!  {i['basic_information']['title']}")
+                    es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
                 time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
             page = page + 1
         except requests.exceptions.ConnectionError:
@@ -83,8 +94,7 @@ def discogs_import_new_entries(discogs_username):
 
 
 def main(args):
-        #discogs_full_import(args.user)
-        get_all_ids()
+    discogs_es_sync(args.user)
 
 if __name__ == "__main__":
         # Build argument parser
