@@ -35,7 +35,7 @@ except Exception as ex:
     print("Error: {}".format(ex))
 
 
-def user_verification():
+def discogs_user_verification():
     """
     Validates that the supplied username exists within Discogs.
     """
@@ -67,7 +67,7 @@ def get_all_ids():
 
 
 def discogs_es_sync(discogs_username):
-    user_verification()
+    discogs_user_verification()
     print("""
 ******************************
 Fetching Elasticsearch _ids...
