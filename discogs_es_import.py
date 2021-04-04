@@ -68,7 +68,6 @@ def get_all_ids():
         es_id_list.append(i['_id'])
     return es_id_list
 
-
 def discogs_es_sync(discogs_username):
     existing_ids = get_all_ids()
     # Scan Discogs library
@@ -81,7 +80,6 @@ def discogs_es_sync(discogs_username):
             albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
             for i in albums["releases"]:
                 discogs_library.append(i['date_added'])
-                #pp.pprint(i)
                 #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
                 es_id = i['date_added']
                 if es_id in existing_ids:
@@ -99,14 +97,13 @@ def discogs_es_sync(discogs_username):
     print("Running cleanup...")
     for i in existing_ids:
         if i not in discogs_library:
-            #debug me! returning Make Yourself and Summer Pack. Should return Make Yourself and Bruce live
-            print(f"this has got to go: {i}")
-        else:
-            print("No albums to delete.")
-
+            id_to_delete = es.get(index="discogs_"+args.user, id=i)
+            print(f"Deleting _id: {i} ({id_to_delete['_source']['basic_information']['title']} by {id_to_delete['_source']['basic_information']['artists'][0]['name']})")
+            # METHOD NEEDED TO DELETE FROM ES
 
 def main(args):
     discogs_es_sync(args.user)
+    #get_all_ids()
 
 if __name__ == "__main__":
         # Build argument parser
