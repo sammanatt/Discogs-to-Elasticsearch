@@ -35,43 +35,37 @@ except Exception as ex:
     print("Error: {}".format(ex))
 
 
-# Importing Discogs library
-url = "https://api.discogs.com/"
-
-def discogs_full_import(discogs_username):
-    page = 1
-    albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
-    total_pages = albums["pagination"]["pages"]
-    while page <= total_pages:
-        try:
-            albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
-            for i in albums["releases"]:
-                print("\n" + i + "\n")
-                es_id = i['date_added']
-                es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-                time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
-            page = page + 1
-        except requests.exceptions.ConnectionError:
-            print("API refused connection.")
-
-
 def get_all_ids():
     """
-    Create a list of all existing _id values within Elascticsearch.
+    Create a list of all existing _id values within the discogs_USERNAME index. If index does not exist, one will be created.
     """
     es_id_list = []
-    get_ids = elasticsearch.helpers.scan(es,
+    try:
+        get_ids = elasticsearch.helpers.scan(es,
                                         query={"query": {"match_all": {}}},
                                         index="discogs_"+args.user,
                                         )
-    for i in get_ids:
-        es_id_list.append(i['_id'])
-    return es_id_list
+        for i in get_ids:
+            es_id_list.append(i['_id'])
+        return es_id_list
+    except elasticsearch.exceptions.NotFoundError:
+        es.indices.create(index='discogs_'+args.user)
+        return es_id_list
 
 def discogs_es_sync(discogs_username):
+    print("""
+******************************
+Fetching Elasticsearch _ids...
+******************************
+""")
     existing_ids = get_all_ids()
-    # Scan Discogs library
+    print("""
+**********************************
+Scanning Discogs for new albums...
+**********************************
+""")
     page = 1
+    url = "https://api.discogs.com/"
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
     total_pages = albums["pagination"]["pages"]
     discogs_library = []
@@ -85,25 +79,29 @@ def discogs_es_sync(discogs_username):
                 if es_id in existing_ids:
                     print(f"Album already exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
                 elif es_id not in existing_ids:
-                    print(f"New album!!!  {i['basic_information']['title']}")
+                    print(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
                     es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-                elif discogs_library:
-                    print("*** WRITE COMMAND TO DELETE FROM ELASTICSEARCH")
                 time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
             page = page + 1
         except requests.exceptions.ConnectionError:
             print("API refused connection.")
     # Delete Elasticsearch documents that no longer exist in Discogs library
-    print("Running cleanup...")
+    print("""
+******************
+Running cleanup...
+******************
+""")
     for i in existing_ids:
         if i not in discogs_library:
             id_to_delete = es.get(index="discogs_"+args.user, id=i)
             print(f"Deleting _id: {i} ({id_to_delete['_source']['basic_information']['title']} by {id_to_delete['_source']['basic_information']['artists'][0]['name']})")
-            # METHOD NEEDED TO DELETE FROM ES
+            es.delete(index='discogs_'+discogs_username, doc_type='_doc', id=i)
+        else:
+            print("No albums to delete")
 
 def main(args):
     discogs_es_sync(args.user)
-    #get_all_ids()
+
 
 if __name__ == "__main__":
         # Build argument parser
