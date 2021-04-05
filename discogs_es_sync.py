@@ -35,9 +35,23 @@ except Exception as ex:
     print("Error: {}".format(ex))
 
 
+def discogs_user_verification():
+    """
+    Validates that the supplied username exists within Discogs.
+    """
+    url = "https://api.discogs.com/"
+    user_collection = requests.get(url+"users/"+str(args.user)+"/collection/folders/0")
+    if user_collection.status_code == 200:
+        print("User exists!")
+    else:
+        exit(f"\nERROR {user_collection.status_code}: {user_collection.content} \nPlease check for typos in Discogs username or sign up for an account at: https://accounts.discogs.com/register?login_challenge=5cc9a3696af745a2a1f7ac4d523de053")
+
+
+
 def get_all_ids():
     """
-    Create a list of all existing _id values within the discogs_USERNAME index. If index does not exist, one will be created.
+    Create a list of all existing _id values within the discogs_USERNAME index.
+    If index does not exist, one will be created.
     """
     es_id_list = []
     try:
@@ -51,6 +65,7 @@ def get_all_ids():
     except elasticsearch.exceptions.NotFoundError:
         es.indices.create(index='discogs_'+args.user)
         return es_id_list
+
 
 def discogs_es_sync(discogs_username):
     print("""
@@ -100,8 +115,8 @@ Running cleanup...
             print("No albums to delete")
 
 def main(args):
+    discogs_user_verification()
     discogs_es_sync(args.user)
-
 
 if __name__ == "__main__":
         # Build argument parser
@@ -115,6 +130,4 @@ if __name__ == "__main__":
 
         if args.user is None:
             args.user = discogs_username
-            if len(discogs_username) < 1:
-                exit('discogs_username is empty in the .env file. Update that variable or use the username argument (-u, --user) to provide username.')
         main(args)
