@@ -1,6 +1,7 @@
 # Discogs
 
 A collection of scripts used to interact with ta public [Discogs](https://www.discogs.com/) library. Discogs API documentation can be found [here](https://www.discogs.com/developers).
+
 ---
 ## Setup
 1. Create and activate a new virtual environment
