@@ -47,7 +47,7 @@ def discogs_user_verification():
         collection_count = collection_string['count']
         return collection_count
     else:
-        exit(f"\nERROR {user_collection.status_code}: {user_collection.content} \nPlease check for typos in Discogs username or sign up for an account at: https://accounts.discogs.com/register?login_challenge=5cc9a3696af745a2a1f7ac4d523de053")
+        exit(f"\nERROR {user_collection.status_code}: {user_collection.json()['message']} \nPlease check for typos in Discogs username or sign up for an account at: https://accounts.discogs.com/register?login_challenge=5cc9a3696af745a2a1f7ac4d523de053")
 
 
 def get_all_ids():
@@ -87,24 +87,24 @@ Scanning Discogs for new albums...
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
     total_pages = albums["pagination"]["pages"]
     discogs_library = []
-    while page <= total_pages:
-        try:
-            albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
-            with tqdm(total = collection_count) as progress_bar:
+    with tqdm(total = collection_count) as progress_bar:
+        while page <= total_pages:
+            try:
+                albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
                 for i in albums["releases"]:
                     progress_bar.update(1)
                     discogs_library.append(i['date_added'])
                     #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
                     es_id = i['date_added']
                     if es_id in existing_ids:
-                        progress_bar.set_description(f"Album already exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                        progress_bar.set_description(f"Album exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
                     elif es_id not in existing_ids:
                         progress_bar.set_description(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
                         es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
                     time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
-            page = page + 1
-        except requests.exceptions.ConnectionError:
-            print("API refused connection.")
+                page = page + 1
+            except requests.exceptions.ConnectionError:
+                print("API refused connection.")
     # Delete Elasticsearch documents that no longer exist in Discogs library
     print("""
 ******************
@@ -120,6 +120,8 @@ Running cleanup...
 
 def main(args):
     discogs_es_sync(args.user)
+
+
 
 if __name__ == "__main__":
         # Build argument parser
