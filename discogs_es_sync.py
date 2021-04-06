@@ -2,12 +2,12 @@ import os
 import sys
 import json
 import time
+import pprint
 import certifi
 import requests
 import argparse
-import pprint
+from tqdm import tqdm
 import elasticsearch.helpers
-from progress.bar import IncrementalBar
 from elasticsearch import Elasticsearch
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -31,7 +31,7 @@ try:
         verify_certs=True,
         ca_certs=certifi.where(),
     )
-    print("Connected {}".format(es.info()))
+    #print("Connected {}".format(es.info()))
 except Exception as ex:
     print("Error: {}".format(ex))
 
@@ -87,26 +87,24 @@ Scanning Discogs for new albums...
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
     total_pages = albums["pagination"]["pages"]
     discogs_library = []
-    progress_bar = IncrementalBar('Processing', max=collection_count,suffix='%(percent)d%%')
     while page <= total_pages:
         try:
             albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
-            for i in albums["releases"]:
-                discogs_library.append(i['date_added'])
-                #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
-                es_id = i['date_added']
-                if es_id in existing_ids:
-                    x =1
-                    #print(f"Album already exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
-                elif es_id not in existing_ids:
-                    print(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
-                    es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-                time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
-                progress_bar.next()
+            with tqdm(total = collection_count) as progress_bar:
+                for i in albums["releases"]:
+                    progress_bar.update(1)
+                    discogs_library.append(i['date_added'])
+                    #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
+                    es_id = i['date_added']
+                    if es_id in existing_ids:
+                        progress_bar.set_description(f"Album already exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                    elif es_id not in existing_ids:
+                        progress_bar.set_description(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                        es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
+                    time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
             page = page + 1
         except requests.exceptions.ConnectionError:
             print("API refused connection.")
-    progress_bar.close()
     # Delete Elasticsearch documents that no longer exist in Discogs library
     print("""
 ******************
@@ -118,8 +116,7 @@ Running cleanup...
             id_to_delete = es.get(index="discogs_"+args.user, id=i)
             print(f"Deleting _id: {i} ({id_to_delete['_source']['basic_information']['title']} by {id_to_delete['_source']['basic_information']['artists'][0]['name']})")
             es.delete(index='discogs_'+discogs_username, doc_type='_doc', id=i)
-        else:
-            print("No albums to delete")
+
 
 def main(args):
     discogs_es_sync(args.user)
