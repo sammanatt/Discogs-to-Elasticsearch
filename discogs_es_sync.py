@@ -117,10 +117,20 @@ Running cleanup...
             print(f"Deleting _id: {i} ({id_to_delete['_source']['basic_information']['title']} by {id_to_delete['_source']['basic_information']['artists'][0]['name']})")
             es.delete(index='discogs_'+discogs_username, doc_type='_doc', id=i)
 
+def auth():
+    discogs_token = os.environ["discogs_token"]
+    url = "https://api.discogs.com/"
+    user_collection = requests.get(url+"users/"+str(args.user),
+                        auth=(args.user,discogs_token))
+    text = user_collection.text
+    headers = user_collection.headers
+    print(f"These is my response text: \n {text}")
+    print(f"\nThese are my headers: \n {headers}")
+    pp.pprint(user_collection.json())
 
 def main(args):
-    discogs_es_sync(args.user)
-
+    #discogs_es_sync(args.user)
+    auth()
 
 
 if __name__ == "__main__":
