@@ -8,6 +8,7 @@ import requests
 import argparse
 from tqdm import tqdm
 import elasticsearch.helpers
+from requests.auth import HTTPBasicAuth
 from elasticsearch import Elasticsearch
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -21,6 +22,7 @@ elasticsearch_password = os.environ["elasticsearch_password"]
 elasticsearch_connection_string = os.environ["elasticsearch_connection_string"]
 elasticsearch_port = os.environ["elasticsearch_port"]
 discogs_username = os.environ["discogs_username"]
+discogs_token = os.environ["discogs_token"]
 
 # Connecting to ES
 try:
@@ -84,7 +86,16 @@ Scanning Discogs for new albums...
     collection_count = discogs_user_verification()
     page = 1
     url = "https://api.discogs.com/"
+    print(f"discogs_token is: {bool(discogs_token)}")
+    auth_sleep = 3
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
+    if discogs_token == True:
+            albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100",headers={'Authorization':'Discogs token='+discogs_token}).json()
+            auth_sleep = 1
+            print("I'm authenticated")
+            return albums, auth_sleep
+    #return albums, auth_sleep
+    print(f"AUTH SLEEP = {str(auth_sleep)}")
     total_pages = albums["pagination"]["pages"]
     discogs_library = []
     with tqdm(total = collection_count) as progress_bar:
@@ -101,7 +112,7 @@ Scanning Discogs for new albums...
                     elif es_id not in existing_ids:
                         progress_bar.set_description(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
                         es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-                    time.sleep(3) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
+                    time.sleep(auth_sleep) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
                 page = page + 1
             except requests.exceptions.ConnectionError:
                 print("API refused connection.")
@@ -118,19 +129,19 @@ Running cleanup...
             es.delete(index='discogs_'+discogs_username, doc_type='_doc', id=i)
 
 def auth():
-    discogs_token = os.environ["discogs_token"]
     url = "https://api.discogs.com/"
     user_collection = requests.get(url+"users/"+str(args.user),
-                        auth=(args.user,discogs_token))
+        headers={'Authorization':'Discogs token='+discogs_token})
     text = user_collection.text
     headers = user_collection.headers
     print(f"These is my response text: \n {text}")
     print(f"\nThese are my headers: \n {headers}")
     pp.pprint(user_collection.json())
+    print(f"discogs_token type is: {bool(discogs_token)}")
 
 def main(args):
-    #discogs_es_sync(args.user)
-    auth()
+    discogs_es_sync(args.user)
+    #auth()
 
 
 if __name__ == "__main__":
