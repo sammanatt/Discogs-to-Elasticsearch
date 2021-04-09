@@ -75,14 +75,12 @@ def discogs_es_sync(discogs_username):
     print("""
 ******************************
 Fetching Elasticsearch _ids...
-******************************
-""")
+******************************""")
     existing_ids = get_all_ids()
     print("""
 **********************************
 Scanning Discogs for new albums...
-**********************************
-""")
+**********************************""")
     collection_count = discogs_user_verification()
     page = 1
     url = "https://api.discogs.com/"
@@ -91,15 +89,11 @@ Scanning Discogs for new albums...
     if bool(discogs_token) is True:
         albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100",headers={'Authorization':'Discogs token='+discogs_token}).json()
         auth_sleep = 1 #1 second sleep with an authenticated request will take advatage of increased rate limit (60 request per minute)
-    print(f"I'm authenticated!! auth_sleep = {auth_sleep}")
-    #return albums, auth_sleep
-    print(f"AUTH SLEEP = {str(auth_sleep)}")
     total_pages = albums["pagination"]["pages"]
     discogs_library = []
     with tqdm(total = collection_count) as progress_bar:
         while page <= total_pages:
             try:
-                albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
                 for i in albums["releases"]:
                     progress_bar.update(1)
                     discogs_library.append(i['date_added'])
@@ -114,32 +108,24 @@ Scanning Discogs for new albums...
                 page = page + 1
             except requests.exceptions.ConnectionError:
                 print("API refused connection.")
-    # Delete Elasticsearch documents that no longer exist in Discogs library
+        progress_bar.close()
     print("""
 ******************
 Running cleanup...
-******************
-""")
+******************""")
+    # Delete Elasticsearch documents that no longer exist in Discogs library
+    counter = 1
     for i in existing_ids:
         if i not in discogs_library:
             id_to_delete = es.get(index="discogs_"+args.user, id=i)
             print(f"Deleting _id: {i} ({id_to_delete['_source']['basic_information']['title']} by {id_to_delete['_source']['basic_information']['artists'][0]['name']})")
             es.delete(index='discogs_'+discogs_username, doc_type='_doc', id=i)
-
-def auth():
-    url = "https://api.discogs.com/"
-    user_collection = requests.get(url+"users/"+str(args.user),
-        headers={'Authorization':'Discogs token='+discogs_token})
-    text = user_collection.text
-    headers = user_collection.headers
-    print(f"These is my response text: \n {text}")
-    print(f"\nThese are my headers: \n {headers}")
-    pp.pprint(user_collection.json())
-    print(f"discogs_token type is: {bool(discogs_token)}")
+            counter +=1
+    if counter == 1:
+        print("No records to cleanup. Elasticsearch is up to date.")
 
 def main(args):
     discogs_es_sync(args.user)
-    #auth()
 
 
 if __name__ == "__main__":
