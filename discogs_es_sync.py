@@ -86,14 +86,12 @@ Scanning Discogs for new albums...
     collection_count = discogs_user_verification()
     page = 1
     url = "https://api.discogs.com/"
-    print(f"discogs_token is: {bool(discogs_token)}")
-    auth_sleep = 3
+    auth_sleep = 3 #3 seconds sleep allows for unathenticated requests to avoid being rate limited.
     albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100").json()
-    if discogs_token == True:
-            albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100",headers={'Authorization':'Discogs token='+discogs_token}).json()
-            auth_sleep = 1
-            print("I'm authenticated")
-            return albums, auth_sleep
+    if bool(discogs_token) is True:
+        albums = requests.get(url+"users/"+str(discogs_username)+"/collection/folders/0/releases?page="+str(page)+"&per_page=100",headers={'Authorization':'Discogs token='+discogs_token}).json()
+        auth_sleep = 1 #1 second sleep with an authenticated request will take advatage of increased rate limit (60 request per minute)
+    print(f"I'm authenticated!! auth_sleep = {auth_sleep}")
     #return albums, auth_sleep
     print(f"AUTH SLEEP = {str(auth_sleep)}")
     total_pages = albums["pagination"]["pages"]
@@ -112,7 +110,7 @@ Scanning Discogs for new albums...
                     elif es_id not in existing_ids:
                         progress_bar.set_description(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
                         es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-                    time.sleep(auth_sleep) #Sleep for discogs rate limiting (add auth to increase to 60 requests per minute)
+                    time.sleep(auth_sleep)
                 page = page + 1
             except requests.exceptions.ConnectionError:
                 print("API refused connection.")
