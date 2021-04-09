@@ -44,6 +44,15 @@ def discogs_user_verification():
     """
     url = "https://api.discogs.com/"
     user_collection = requests.get(url+"users/"+str(args.user)+"/collection/folders/0")
+    #if statement to confirm that a valid token has been provided.
+    if bool(discogs_token) is True:
+        try:
+            token_check = requests.get(url+"users/"+str(args.user), headers={'Authorization':'Discogs token='+discogs_token}).json()
+            if bool(token_check['email']) is True:
+                pass
+        except KeyError:
+                exit(f"The Discogs token provided for {args.user} is invalid. Please update .env with a valid token."  )
+    # if statement to verify a valid Discogs user has been supplied.
     if user_collection.status_code == 200:
         collection_string = user_collection.json()
         collection_count = collection_string['count']
@@ -91,24 +100,25 @@ Scanning Discogs for new albums...
         auth_sleep = 1 #1 second sleep with an authenticated request will take advatage of increased rate limit (60 request per minute)
     total_pages = albums["pagination"]["pages"]
     discogs_library = []
-    with tqdm(total = collection_count) as progress_bar:
-        while page <= total_pages:
-            try:
-                for i in albums["releases"]:
-                    progress_bar.update(1)
-                    discogs_library.append(i['date_added'])
-                    #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
-                    es_id = i['date_added']
-                    if es_id in existing_ids:
-                        progress_bar.set_description(f"Album exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
-                    elif es_id not in existing_ids:
-                        progress_bar.set_description(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
-                        es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
-                    time.sleep(auth_sleep)
-                page = page + 1
-            except requests.exceptions.ConnectionError:
-                print("API refused connection.")
-        progress_bar.close()
+    #with tqdm(total = collection_count) as progress_bar:
+    progress_bar = tqdm(total = collection_count)
+    while page <= total_pages:
+        try:
+            for i in albums["releases"]:
+                progress_bar.update(1)
+                discogs_library.append(i['date_added'])
+                #date added was selected as the es_id as it's the unique timestamp a user added the entry to their collection.
+                es_id = i['date_added']
+                if es_id in existing_ids:
+                    progress_bar.set_description(f"Album exists: {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                elif es_id not in existing_ids:
+                    progress_bar.set_description(f"New album!!!  {i['basic_information']['title']} by {i['basic_information']['artists'][0]['name']}")
+                    es.index(index='discogs_'+discogs_username, doc_type='_doc', id=es_id, body=i)
+                time.sleep(auth_sleep)
+            page = page + 1
+        except requests.exceptions.ConnectionError:
+            print("API refused connection.")
+    progress_bar.close()
     print("""
 ******************
 Running cleanup...
