@@ -140,7 +140,7 @@ def main(args):
 
 if __name__ == "__main__":
         # Build argument parser
-        parser = argparse.ArgumentParser(description='Send communcations to multiple customers via email.')
+        parser = argparse.ArgumentParser(description='Syncronize a Discogs collection with an Elasticsearch index.')
         parser.add_argument('-u',
                             '--user',
                           default=None,
